@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>HTML5 running man</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+		}
+
+		canvas {
+			background-color: #000;
+			padding: 0;
+			margin: 0;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="game" width="800" height="600" tabindex='1'></canvas>
+	<script type="text/javascript">
+	(function() {
+		// http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+		// http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+		// requestAnimationFrame polyfill by Erik Möller. fixes from Paul Irish and Tino Zijdel
+		// MIT license
+    	
+    	var vendors = ['ms', 'moz', 'webkit', 'o'];
+    	for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+    	    window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+    	    window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame'] 
+    	                               || window[vendors[x]+'CancelRequestAnimationFrame'];
+    	}
+ 	
+    	if (!window.requestAnimationFrame)
+    	    window.requestAnimationFrame = function(callback, element) {
+    	        var id = window.setTimeout(callback, 
+    	          1000/30);
+    	        
+    	        return id;
+    	    };
+ 	
+    	if (!window.cancelAnimationFrame)
+    	    window.cancelAnimationFrame = function(id) {
+    	        clearTimeout(id);
+    	    };
+    })();
+
+    var RR = RR || {};
+
+    RR.Constants = {
+    	GAME: {
+    		WIDTH: 800,
+    		HEIGHT: 400
+    	},
+    	PLAYER: {
+    		WIDTH: 218,
+    		HEIGHT: 74,
+    		NUMBER_OF_FRAMES: 4,
+    		TICKS_PER_FRAME: 4,
+    		IMAGE_SRC: "images/run-right.png"
+    	},
+    	FLOOR: {
+    		WIDTH: 25,
+    		HEIGHT: 96,
+    		VELOCITY: 10,
+    		IMAGE_SRC: "images/floor.png"
+    	},
+    	HURDLE: {
+    		FRONT: {
+    			SMALL: {
+    				HEIGHT: 44,
+    				WIDTH: 18,
+    				IMAGE_SRC: "images/hurdle-front-small.png"
+    			},
+    			MEDIUM: {
+    				HEIGHT: 74,
+    				WIDTH: 18,
+    				IMAGE_SRC: "images/hurdle-front-medium.png"
+    			},
+    			LARGE: {
+    				HEIGHT: 104,
+    				WIDTH: 18,
+    				IMAGE_SRC: "images/hurdle-front-large.png"
+    			},
+    			VELOCITY_OFFSET: 1,
+    			X_OFFSET: 40
+    		},
+    		BACK: {
+    			SMALL: {
+    				HEIGHT: 32,
+    				WIDTH: 12,
+    				IMAGE_SRC: "images/hurdle-back-small.png"
+    			},
+    			MEDIUM: {
+    				HEIGHT: 54,
+    				WIDTH: 12,
+    				IMAGE_SRC: "images/hurdle-back-medium.png"
+    			},
+    			LARGE: {
+    				HEIGHT: 75,
+    				WIDTH: 12,
+    				IMAGE_SRC: "images/hurdle-back-large.png"
+    			}
+    		},
+    		SIZE: {
+    			SMALL: 1,
+    			MEDIUM: 2,
+    			LARGE: 3
+    		}
+    	}
+    }
+
+    RR.Game = function() {
+
+		var _gameLoadPercent = 0;
+
+		var _assets = {
+			player: null,
+			floorTiles: [],
+			hurdles: []
+		};
+
+		var _canvas,
+			_context,
+			_playerSpriteImage, 
+			_floorSpriteImage, 
+			_hurdleSmallFrontSpriteImage, 
+			_hurdleSmallBackSpriteImage,
+			_hurdleMediumFrontSpriteImage, 
+			_hurdleMediumBackSpriteImage,
+			_hurdleLargeFrontSpriteImage, 
+			_hurdleLargeBackSpriteImage;
+
+    	function init() {
+    		setupCanvas();
+    		preloadImages();
+    		loadAssets();
+    		loadEvents();
+    	}
+
+    	function onload()
+    	{
+    		_gameLoadPercent += 12.5;
+
+    		if (_gameLoadPercent === 100)
+    			gameLoop();
+    	}
+
+    	function setupCanvas() {
+    		_canvas = document.getElementById("game");
+			_context = _canvas.getContext("2d");
+    		_canvas.width = RR.Constants.GAME.WIDTH;
+			_canvas.height = RR.Constants.GAME.HEIGHT;
+    	}
+
+    	function preloadImages()
+    	{
+    		if (!_playerSpriteImage) {
+    			_playerSpriteImage = new Image();
+				_playerSpriteImage.src = RR.Constants.PLAYER.IMAGE_SRC;
+				_playerSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_floorSpriteImage) {
+    			_floorSpriteImage = new Image();
+				_floorSpriteImage.src = RR.Constants.FLOOR.IMAGE_SRC;
+				_floorSpriteImage.addEventListener("load", onload);
+			}
+
+    		if (!_hurdleSmallBackSpriteImage) {
+    			_hurdleSmallBackSpriteImage = new Image();
+				_hurdleSmallBackSpriteImage.src = RR.Constants.HURDLE.BACK.SMALL.IMAGE_SRC;
+				_hurdleSmallBackSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleSmallFrontSpriteImage) {
+    			_hurdleSmallFrontSpriteImage = new Image();
+				_hurdleSmallFrontSpriteImage.src = RR.Constants.HURDLE.FRONT.SMALL.IMAGE_SRC;
+				_hurdleSmallFrontSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleMediumBackSpriteImage) {
+    			_hurdleMediumBackSpriteImage = new Image();
+				_hurdleMediumBackSpriteImage.src = RR.Constants.HURDLE.BACK.MEDIUM.IMAGE_SRC;
+				_hurdleMediumBackSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleMediumFrontSpriteImage) {
+    			_hurdleMediumFrontSpriteImage = new Image();
+				_hurdleMediumFrontSpriteImage.src = RR.Constants.HURDLE.FRONT.MEDIUM.IMAGE_SRC;
+				_hurdleMediumFrontSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleLargeBackSpriteImage) {
+    			_hurdleLargeBackSpriteImage = new Image();
+				_hurdleLargeBackSpriteImage.src = RR.Constants.HURDLE.BACK.LARGE.IMAGE_SRC;
+				_hurdleLargeBackSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleLargeFrontSpriteImage) {
+    			_hurdleLargeFrontSpriteImage = new Image();
+				_hurdleLargeFrontSpriteImage.src = RR.Constants.HURDLE.FRONT.LARGE.IMAGE_SRC;
+				_hurdleLargeFrontSpriteImage.addEventListener("load", onload);
+			}
+    	}
+
+    	function loadAssets() {
+    		_assets.player = loadPlayer();
+    		_assets.floorTiles = loadFloor();
+    		_assets.hurdles.push(loadHurdle(RR.Constants.HURDLE.SIZE.SMALL));
+    	}
+
+    	function loadPlayer() {
+
+			return generateSprite({
+				context: _context,
+				width: RR.Constants.PLAYER.WIDTH,
+				height: RR.Constants.PLAYER.HEIGHT,
+				x: (RR.Constants.GAME.WIDTH / 2) - ((RR.Constants.PLAYER.WIDTH / RR.Constants.PLAYER.NUMBER_OF_FRAMES) / 2),
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.PLAYER.HEIGHT,
+				image: _playerSpriteImage,
+				numberOfFrames: RR.Constants.PLAYER.NUMBER_OF_FRAMES,
+				ticksPerFrame: RR.Constants.PLAYER.TICKS_PER_FRAME
+			});
+    	}
+
+    	function loadFloor() {
+
+			var floorX = 0;
+			var floorY = RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT;
+			var floorTiles = [];
+
+			for (var x = 0; x < Math.ceil(RR.Constants.GAME.WIDTH / RR.Constants.FLOOR.WIDTH); x++)
+			{
+				floorTiles.push(generateSprite({
+					context: _context,
+					width: RR.Constants.FLOOR.WIDTH,
+					height: RR.Constants.FLOOR.HEIGHT,
+					x: floorX,
+					y: floorY,
+					image: _floorSpriteImage
+				}));
+				
+				floorX += RR.Constants.FLOOR.WIDTH;
+			}
+
+			return floorTiles;
+    	}
+
+    	function loadHurdle(hurdleSize) {
+
+    		var hurdle = {};
+
+			if (hurdleSize === RR.Constants.HURDLE.SIZE.SMALL) {
+				hurdle = loadSmallHurdle();
+			}
+			else if (hurdleSize === RR.Constants.HURDLE.SIZE.MEDIUM) {
+				hurdle = loadMediumHurdle();
+			}
+			else
+			{
+				hurdle = loadLargeHurdle();
+			}
+
+			hurdle.render = function() {
+				if (this.front.x > this.back.x)
+				{
+					_context.clearRect(
+						this.back.x,
+						this.front.y,
+						(this.front.x - this.back.x) + this.front.width, 
+						this.front.height);
+				}
+				else
+				{
+					_context.clearRect(
+						this.front.x,
+						this.front.y,
+						(this.back.x - this.front.x) + this.back.width, 
+						this.front.height);
+				}
+
+				if (_assets.player.isAnimating)
+				{
+					this.front.x += RR.Constants.FLOOR.VELOCITY + RR.Constants.HURDLE.FRONT.VELOCITY_OFFSET;
+					this.back.x += RR.Constants.FLOOR.VELOCITY;
+
+					if (this.back.x > RR.Constants.GAME.WIDTH)
+					{
+						this.back.x = -this.back.width;
+						this.front.x = -this.front.width - RR.Constants.HURDLE.FRONT.X_OFFSET;
+					}
+				}
+
+				var isBeyondPlayer = this.front.x > _assets.player.x;
+
+				var moveToX = this.back.x + (isBeyondPlayer ? 4 : 8);
+				var lineToX = this.front.x + (isBeyondPlayer ? 4 : 8);
+
+				this.back.render();
+
+				_context.beginPath();
+				_context.moveTo(moveToX, this.back.y+10);
+				_context.lineTo(lineToX, this.front.y+10);
+				_context.moveTo(moveToX, this.back.y+22);
+				_context.lineTo(lineToX, this.front.y+22);
+
+				if (this.front.height > RR.Constants.HURDLE.FRONT.SMALL.HEIGHT)
+				{
+					_context.moveTo(moveToX, this.back.y+34);
+					_context.lineTo(lineToX, this.front.y+34);
+				}
+				_context.lineWidth = 5;
+      			_context.strokeStyle = '#ff0000';
+				_context.stroke();
+				
+				this.front.render();
+			};
+
+			return hurdle;
+    	}
+
+    	function loadSmallHurdle() {
+
+			var hurdleX = 0;
+
+			var hurdleFront = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.FRONT.SMALL.WIDTH,
+				height: RR.Constants.HURDLE.FRONT.SMALL.HEIGHT,
+				x: -RR.Constants.HURDLE.FRONT.SMALL.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.SMALL.HEIGHT,
+				image: _hurdleSmallFrontSpriteImage
+			});
+
+			var hurdleBack = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.BACK.SMALL.WIDTH,
+				height: RR.Constants.HURDLE.BACK.SMALL.HEIGHT,
+				x: -RR.Constants.HURDLE.BACK.SMALL.WIDTH,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.SMALL.HEIGHT,
+				image: _hurdleSmallBackSpriteImage
+			});
+
+			return { front: hurdleFront, back: hurdleBack };
+    	}
+
+    	function loadMediumHurdle() {
+
+			var hurdleX = 0;
+
+			var hurdleFront = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.FRONT.MEDIUM.WIDTH,
+				height: RR.Constants.HURDLE.FRONT.MEDIUM.HEIGHT,
+				x: -RR.Constants.HURDLE.FRONT.MEDIUM.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.MEDIUM.HEIGHT,
+				image: _hurdleMediumFrontSpriteImage
+			});
+
+			var hurdleBack = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.BACK.MEDIUM.WIDTH,
+				height: RR.Constants.HURDLE.BACK.MEDIUM.HEIGHT,
+				x: -RR.Constants.HURDLE.BACK.MEDIUM.WIDTH,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.MEDIUM.HEIGHT,
+				image: _hurdleMediumBackSpriteImage
+			});
+
+			return { front: hurdleFront, back: hurdleBack };
+    	}
+
+    	function loadLargeHurdle() {
+
+			var hurdleX = 0;
+
+			var hurdleFront = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.FRONT.LARGE.WIDTH,
+				height: RR.Constants.HURDLE.FRONT.LARGE.HEIGHT,
+				x: -RR.Constants.HURDLE.FRONT.LARGE.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.LARGE.HEIGHT,
+				image: _hurdleLargeFrontSpriteImage
+			});
+
+			var hurdleBack = generateSprite({
+				context: _context,
+				width: RR.Constants.HURDLE.BACK.LARGE.WIDTH,
+				height: RR.Constants.HURDLE.BACK.LARGE.HEIGHT,
+				x: -RR.Constants.HURDLE.BACK.LARGE.WIDTH,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.LARGE.HEIGHT,
+				image: _hurdleLargeBackSpriteImage
+			});
+
+			return { front: hurdleFront, back: hurdleBack };
+    	}
+
+    	function generateSprite(options) {
+			var sprite = {};
+			var frameIndex = 0;
+			var tickCount = 0;
+			var ticksPerFrame = options.ticksPerFrame || 0;
+
+			sprite.context = options.context;
+			sprite.width = options.width;
+			sprite.height = options.height;
+			sprite.x = options.x;
+			sprite.y = options.y;
+			sprite.image = options.image;
+			sprite.isAnimating = options.isAnimating || false;;
+			sprite.numberOfFrames = options.numberOfFrames || 1;
+
+			sprite.clear = function() {
+
+				sprite.context.clearRect(
+					sprite.x,
+					sprite.y,
+					sprite.width, 
+					sprite.height);
+
+			};
+
+			sprite.render = function() {
+
+				sprite.context.drawImage(
+					sprite.image,
+					frameIndex * sprite.width / sprite.numberOfFrames,
+					0,
+					sprite.width / sprite.numberOfFrames,
+					sprite.height,
+					sprite.x,
+					sprite.y,
+					sprite.width / sprite.numberOfFrames,
+					sprite.height
+				);
+			};
+
+			sprite.update = function() {
+				tickCount++;
+
+				if (tickCount > ticksPerFrame) {
+					tickCount = 0;
+					
+					if (frameIndex < sprite.numberOfFrames - 1 && sprite.isAnimating)
+						frameIndex++;
+					else
+						frameIndex = 0;
+				}
+			};
+
+			return sprite;
+		}
+
+		function loadEvents() {
+			document.addEventListener('keydown', function(event) {
+            	_assets.player.isAnimating = true;
+    		}, false);
+
+    		document.addEventListener('keyup', function(event) {
+            	_assets.player.isAnimating = false;
+    		}, false);
+		}
+
+		function draw() {
+
+			// player
+			_assets.player.clear();
+			_assets.player.render();
+
+			// hurdles
+			for (var i = 0; i < _assets.hurdles.length; i++) {
+				_assets.hurdles[i].render();
+			};
+
+			// floor
+			for (var i = 0; i < _assets.floorTiles.length; i++) {
+				
+				if (_assets.player.isAnimating)
+					{
+						_assets.floorTiles[i].x = _assets.floorTiles[i].x + RR.Constants.FLOOR.VELOCITY;
+	
+						if (_assets.floorTiles[i].x > RR.Constants.GAME.WIDTH)
+							_assets.floorTiles[i].x = -RR.Constants.FLOOR.WIDTH;
+					}
+	
+					_assets.floorTiles[i].clear();
+					_assets.floorTiles[i].render();
+			};
+			
+		}
+
+		function update() {
+			_assets.player.update();
+		}
+
+		function gameLoop()
+		{
+			window.requestAnimationFrame(gameLoop);
+
+			update();
+			draw();
+		}
+
+    	init();
+    };
+
+	(function() {
+		new RR.Game();
+	})();
+
+	</script>
+</body>
+</hmtl>
