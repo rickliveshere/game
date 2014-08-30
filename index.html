@@ -51,7 +51,13 @@
     RR.Constants = {
     	GAME: {
     		WIDTH: 800,
-    		HEIGHT: 400
+    		HEIGHT: 400,
+    		LEVEL_INTERVAL: 5000
+    	},
+    	BACKGROUND: {
+    		WIDTH: 800,
+    		HEIGHT: 300,
+    		IMAGE_SRC: "images/background.png"
     	},
     	PLAYER: {
     		WIDTH: 218,
@@ -63,7 +69,7 @@
     	FLOOR: {
     		WIDTH: 25,
     		HEIGHT: 96,
-    		VELOCITY: 10,
+    		VELOCITY: 5,
     		IMAGE_SRC: "images/floor.png"
     	},
     	HURDLE: {
@@ -83,7 +89,7 @@
     				WIDTH: 18,
     				IMAGE_SRC: "images/hurdle-front-large.png"
     			},
-    			VELOCITY_OFFSET: 1,
+    			VELOCITY_OFFSET: 0.5,
     			X_OFFSET: 40
     		},
     		BACK: {
@@ -115,14 +121,21 @@
 
 		var _gameLoadPercent = 0;
 
+		var _nextLevelToken;
+
+		var _gameLevel = 0;
+		var _nextGameLevel = 0;
+
 		var _assets = {
 			player: null,
+			background: null,
 			floorTiles: [],
 			hurdles: []
 		};
 
 		var _canvas,
 			_context,
+			_backgroundImage, 
 			_playerSpriteImage, 
 			_floorSpriteImage, 
 			_hurdleSmallFrontSpriteImage, 
@@ -144,7 +157,12 @@
     		_gameLoadPercent += 12.5;
 
     		if (_gameLoadPercent === 100)
+    		{
+				prepareNextLevel();
+
+    			_assets.player.isAnimating = true;
     			gameLoop();
+    		}
     	}
 
     	function setupCanvas() {
@@ -156,6 +174,12 @@
 
     	function preloadImages()
     	{
+    		if (!_backgroundImage) {
+    			_backgroundImage = new Image();
+				_backgroundImage.src = RR.Constants.BACKGROUND.IMAGE_SRC;
+				_backgroundImage.addEventListener("load", onload);
+			}
+
     		if (!_playerSpriteImage) {
     			_playerSpriteImage = new Image();
 				_playerSpriteImage.src = RR.Constants.PLAYER.IMAGE_SRC;
@@ -207,8 +231,21 @@
 
     	function loadAssets() {
     		_assets.player = loadPlayer();
+    		_assets.background = loadBackground();
     		_assets.floorTiles = loadFloor();
     		_assets.hurdles.push(loadHurdle(RR.Constants.HURDLE.SIZE.SMALL));
+    	}
+
+    	function loadBackground() {
+
+			return generateSprite({
+				context: _context,
+				width: RR.Constants.BACKGROUND.WIDTH,
+				height: RR.Constants.BACKGROUND.HEIGHT,
+				x: 0,
+				y: 5,
+				image: _backgroundImage
+			});
     	}
 
     	function loadPlayer() {
@@ -227,11 +264,11 @@
 
     	function loadFloor() {
 
-			var floorX = 0;
+			var floorX = -RR.Constants.FLOOR.WIDTH;
 			var floorY = RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT;
 			var floorTiles = [];
 
-			for (var x = 0; x < Math.ceil(RR.Constants.GAME.WIDTH / RR.Constants.FLOOR.WIDTH); x++)
+			for (var x = 0; x <= Math.ceil(RR.Constants.GAME.WIDTH / RR.Constants.FLOOR.WIDTH); x++)
 			{
 				floorTiles.push(generateSprite({
 					context: _context,
@@ -263,36 +300,15 @@
 				hurdle = loadLargeHurdle();
 			}
 
-			hurdle.render = function() {
-				if (this.front.x > this.back.x)
-				{
-					_context.clearRect(
-						this.back.x,
-						this.front.y,
-						(this.front.x - this.back.x) + this.front.width, 
-						this.front.height);
-				}
-				else
-				{
-					_context.clearRect(
-						this.front.x,
-						this.front.y,
-						(this.back.x - this.front.x) + this.back.width, 
-						this.front.height);
-				}
-
+			hurdle.update = function() {
 				if (_assets.player.isAnimating)
 				{
 					this.front.x += RR.Constants.FLOOR.VELOCITY + RR.Constants.HURDLE.FRONT.VELOCITY_OFFSET;
 					this.back.x += RR.Constants.FLOOR.VELOCITY;
-
-					if (this.back.x > RR.Constants.GAME.WIDTH)
-					{
-						this.back.x = -this.back.width;
-						this.front.x = -this.front.width - RR.Constants.HURDLE.FRONT.X_OFFSET;
-					}
 				}
+			};
 
+			hurdle.render = function() {
 				var isBeyondPlayer = this.front.x > _assets.player.x;
 
 				var moveToX = this.back.x + (isBeyondPlayer ? 4 : 8);
@@ -411,16 +427,6 @@
 			sprite.isAnimating = options.isAnimating || false;;
 			sprite.numberOfFrames = options.numberOfFrames || 1;
 
-			sprite.clear = function() {
-
-				sprite.context.clearRect(
-					sprite.x,
-					sprite.y,
-					sprite.width, 
-					sprite.height);
-
-			};
-
 			sprite.render = function() {
 
 				sprite.context.drawImage(
@@ -458,34 +464,57 @@
     		}, false);
 
     		document.addEventListener('keyup', function(event) {
-            	_assets.player.isAnimating = false;
+            	//_assets.player.isAnimating = false;
     		}, false);
 		}
 
 		function draw() {
 
+			// background
+			_assets.background.render();
+
 			// player
-			_assets.player.clear();
 			_assets.player.render();
 
 			// hurdles
+
 			for (var i = 0; i < _assets.hurdles.length; i++) {
+				_assets.hurdles[i].update();
+
+				if (_assets.hurdles[i].back.x > RR.Constants.GAME.WIDTH)
+				{
+					_assets.hurdles[i] = loadHurdle(randomIntFromInterval(RR.Constants.HURDLE.SIZE.SMALL, RR.Constants.HURDLE.SIZE.LARGE));
+				}
+
 				_assets.hurdles[i].render();
 			};
+
+			if (_gameLevel == _nextGameLevel)
+			{
+				var breakpoint = Math.round(RR.Constants.GAME.WIDTH / (_gameLevel+1));
+
+				if (_assets.hurdles[0].back.x < breakpoint && (_assets.hurdles[0].back.x + RR.Constants.FLOOR.VELOCITY) >= breakpoint)
+				{
+					_assets.hurdles.push(
+						loadHurdle(randomIntFromInterval(RR.Constants.HURDLE.SIZE.SMALL, RR.Constants.HURDLE.SIZE.LARGE))
+					);
+
+					prepareNextLevel();
+				}
+			}
 
 			// floor
 			for (var i = 0; i < _assets.floorTiles.length; i++) {
 				
 				if (_assets.player.isAnimating)
-					{
-						_assets.floorTiles[i].x = _assets.floorTiles[i].x + RR.Constants.FLOOR.VELOCITY;
+				{
+					_assets.floorTiles[i].x += RR.Constants.FLOOR.VELOCITY;
 	
-						if (_assets.floorTiles[i].x > RR.Constants.GAME.WIDTH)
-							_assets.floorTiles[i].x = -RR.Constants.FLOOR.WIDTH;
-					}
+					if (_assets.floorTiles[i].x >= RR.Constants.GAME.WIDTH)
+						_assets.floorTiles[i].x = -RR.Constants.FLOOR.WIDTH;
+				}
 	
-					_assets.floorTiles[i].clear();
-					_assets.floorTiles[i].render();
+				_assets.floorTiles[i].render();
 			};
 			
 		}
@@ -494,12 +523,37 @@
 			_assets.player.update();
 		}
 
+		function clear() {
+			_context.clearRect(
+				0,
+				0,
+				RR.Constants.GAME.WIDTH, 
+				RR.Constants.GAME.HEIGHT);
+		}
+
 		function gameLoop()
 		{
 			window.requestAnimationFrame(gameLoop);
 
 			update();
+			clear();
 			draw();
+		}
+
+		function prepareNextLevel() {
+			_nextGameLevel++;
+
+			if (_nextLevelToken)
+				clearTimeout(_nextLevelToken);
+
+			_nextLevelToken = setTimeout(function() {
+    				_gameLevel++;
+    			}, RR.Constants.GAME.LEVEL_INTERVAL);
+		}
+
+		function randomIntFromInterval(min,max)
+		{
+		    return Math.floor(Math.random()*(max-min+1)+min);
 		}
 
     	init();
