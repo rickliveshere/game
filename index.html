@@ -54,10 +54,11 @@
     	GAME: {
     		WIDTH: 800,
     		HEIGHT: 400,
-    		INITIAL_LEVEL_INTERVAL: 4500,
-    		MIN_LEVEL_INTERVAL: 1000,
-    		LEVEL_INTERVAL: 250,
-    		GRAVITY: 1
+    		INITIAL_LEVEL_INTERVAL: 3000,
+    		MIN_LEVEL_INTERVAL: 625,
+    		LEVEL_INTERVAL: 500,
+    		GRAVITY: 1,
+    		GAME_OVER_ROTATE: 0.1
     	},
     	BUTTON: {
     		SPACEBAR: 32
@@ -75,8 +76,8 @@
     		IMAGE_SRC: "images/run-right.png",
     		JUMP_IMAGE_SRC: "images/jump.png",
     		NUMBER_OF_JUMP_FRAMES: 2,
-    		JUMP_VELOCITY: -17,
-    		MAX_JUMP_Y: 104
+    		JUMP_VELOCITY: -10.7,
+    		MAX_BUTTON_PRESS: 5
     	},
     	FLOOR: {
     		WIDTH: 25,
@@ -139,7 +140,12 @@
 
 		var _levelInterval = RR.Constants.GAME.INITIAL_LEVEL_INTERVAL;
 
+		var _levelIntervalOffset = RR.Constants.GAME.LEVEL_INTERVAL;
+
 		var _jumpVelocity = RR.Constants.PLAYER.JUMP_VELOCITY;
+
+		var _buttonPressed = false;
+		var _buttonPress = 0;
 
 		var _assets = {
 			player: null,
@@ -292,43 +298,83 @@
 			player.isJumping = false;
 
 			player.jumpStateOn = function() {
-				player.isJumping = true;
-				player.image = _playerJumpSpriteImage;
-				player.numberOfFrames = RR.Constants.PLAYER.NUMBER_OF_JUMP_FRAMES;
-				player.ticksPerFrame = RR.Constants.PLAYER.TICKS_PER_FRAME * 2;
-				player.width = RR.Constants.PLAYER.WIDTH / 2;
+				this.isJumping = true;
+				this.image = _playerJumpSpriteImage;
+				this.numberOfFrames = RR.Constants.PLAYER.NUMBER_OF_JUMP_FRAMES;
+				this.ticksPerFrame = RR.Constants.PLAYER.TICKS_PER_FRAME * 2;
+				this.width = RR.Constants.PLAYER.WIDTH / 2;
 
-				player.resetState();
+				this.resetState();
 			};
 
 			player.jumpStateOff = function() {
-				player.isJumping = false;
-				player.image = _playerSpriteImage;
-				player.numberOfFrames = RR.Constants.PLAYER.NUMBER_OF_FRAMES;
-				player.ticksPerFrame = RR.Constants.PLAYER.TICKS_PER_FRAME;
-				player.width = RR.Constants.PLAYER.WIDTH;
+				this.isJumping = false;
+				this.image = _playerSpriteImage;
+				this.numberOfFrames = RR.Constants.PLAYER.NUMBER_OF_FRAMES;
+				this.ticksPerFrame = RR.Constants.PLAYER.TICKS_PER_FRAME;
+				this.width = RR.Constants.PLAYER.WIDTH;
 				_jumpVelocity = RR.Constants.PLAYER.JUMP_VELOCITY;
+				_buttonPress = 0;
+			};
+
+			player.updateJumpState = function() {
+
+				this.y += _jumpVelocity;
+				_jumpVelocity += _buttonPressed ? 0 : RR.Constants.GAME.GRAVITY;
+				
+				if (_buttonPress === RR.Constants.PLAYER.MAX_BUTTON_PRESS)
+					_buttonPressed = false;
+
+				_buttonPress++;
+
+				var playerYMax = this.y + this.height;
+
+				if ((playerYMax + _jumpVelocity) > _floorY)
+				{
+					_jumpVelocity = _floorY - (playerYMax);
+				}
+
+				if (playerYMax === _floorY)
+				{
+					this.jumpStateOff();
+				}
+			};
+
+			player.checkCollision = function(hurdle) {
+
+				var playerX = this.x+10;
+				var playerY = this.y;
+
+				var playerXMax = playerX + (this.width / this.numberOfFrames) - 23;
+				var playerYMax = playerY + this.height;
+
+				var hurdleX = hurdle.front.x+2;
+				var hurdleY = hurdle.front.y+5;
+
+				var hurdleXMax = hurdle.front.x + hurdle.front.width-2;
+				var hurdleYMax = hurdle.front.y + hurdle.front.height-2;
+
+				if (playerX < hurdleXMax  && playerXMax > hurdleX &&
+					playerY < hurdleYMax && playerYMax > hurdleY) {
+					
+					// Game over
+					this.gameOver();
+				}
 			};
 
 			player.updateState = function() {
+
 				if (player.isJumping)
 				{
-					player.y += _jumpVelocity;
-					_jumpVelocity += RR.Constants.GAME.GRAVITY;
-
-					if ((player.y + player.height + _jumpVelocity) > _floorY)
-					{
-						_jumpVelocity = _floorY - player.y;
-					}
-
-					if (player.y + player.height === _floorY)
-					{
-						player.jumpStateOff();
-					}
+					player.updateJumpState();
 				}
 
 				player.update();
 			};
+
+			player.gameOver = function() {
+				this.isAnimating = false;
+			}
 
 			return player;
     	}
@@ -538,14 +584,18 @@
 			document.addEventListener('keydown', function(event) {
             	if (event.keyCode === RR.Constants.BUTTON.SPACEBAR)
             	{
-            		_assets.player.jumpStateOn();
+            		if (!_assets.player.isJumping)
+            		{
+            			_assets.player.jumpStateOn();
+            			_buttonPressed = true;
+            		}
             	}
     		}, false);
 
     		document.addEventListener('keyup', function(event) {
             	if (event.keyCode === RR.Constants.BUTTON.SPACEBAR)
             	{
-            		//_assets.player.isJumping = false;
+            		_buttonPressed = false;
             	}
     		}, false);
 		}
@@ -563,6 +613,8 @@
 			for (var i = _assets.hurdles.length-1; i >= 0; i--) {
 				_assets.hurdles[i].update();
 				_assets.hurdles[i].render();
+
+				_assets.player.checkCollision(_assets.hurdles[i]);
 
 				if (_assets.hurdles[i].back.x > RR.Constants.GAME.WIDTH)
 				{
@@ -625,7 +677,8 @@
 
 			if (_levelInterval > RR.Constants.GAME.MIN_LEVEL_INTERVAL)
 			{
-				_levelInterval -= RR.Constants.GAME.LEVEL_INTERVAL;
+				_levelInterval -= _levelIntervalOffset;
+				_levelIntervalOffset -= 20;
 			}
 		}
 
