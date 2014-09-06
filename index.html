@@ -55,8 +55,8 @@
     		WIDTH: 800,
     		HEIGHT: 400,
     		INITIAL_LEVEL_INTERVAL: 3000,
-    		MIN_LEVEL_INTERVAL: 625,
-    		LEVEL_INTERVAL: 500,
+    		MIN_LEVEL_INTERVAL: 1000,
+    		LEVEL_INTERVAL: 120,
     		GRAVITY: 1,
     		GAME_OVER_ROTATE: 0.1
     	},
@@ -76,7 +76,7 @@
     		IMAGE_SRC: "images/run-right.png",
     		JUMP_IMAGE_SRC: "images/jump.png",
     		NUMBER_OF_JUMP_FRAMES: 2,
-    		JUMP_VELOCITY: -10.7,
+    		JUMP_VELOCITY: -10,
     		MAX_BUTTON_PRESS: 5
     	},
     	FLOOR: {
@@ -84,6 +84,12 @@
     		HEIGHT: 96,
     		VELOCITY: 5,
     		IMAGE_SRC: "images/floor.png"
+    	},
+    	SHIP: {
+    		WIDTH: 30,
+    		HEIGHT: 14,
+    		VELOCITY: 0.2,
+    		IMAGE_SRC: "images/ship.png"
     	},
     	HURDLE: {
     		FRONT: {
@@ -96,6 +102,11 @@
     				HEIGHT: 74,
     				WIDTH: 18,
     				IMAGE_SRC: "images/hurdle-front-medium.png"
+    			},
+    			MEDIUM_LARGE: {
+    				HEIGHT: 89,
+    				WIDTH: 18,
+    				IMAGE_SRC: "images/hurdle-front-midlarge.png"
     			},
     			LARGE: {
     				HEIGHT: 104,
@@ -116,6 +127,11 @@
     				WIDTH: 12,
     				IMAGE_SRC: "images/hurdle-back-medium.png"
     			},
+    			MEDIUM_LARGE: {
+    				HEIGHT: 65,
+    				WIDTH: 12,
+    				IMAGE_SRC: "images/hurdle-back-midlarge.png"
+    			},
     			LARGE: {
     				HEIGHT: 75,
     				WIDTH: 12,
@@ -125,7 +141,8 @@
     		SIZE: {
     			SMALL: 1,
     			MEDIUM: 2,
-    			LARGE: 3
+    			MEDIUM_LARGE: 3,
+    			LARGE: 4
     		}
     	}
     }
@@ -150,6 +167,7 @@
 		var _assets = {
 			player: null,
 			background: null,
+			ship: null,
 			floorTiles: [],
 			hurdles: []
 		};
@@ -159,11 +177,14 @@
 			_backgroundImage, 
 			_playerSpriteImage,
 			_playerJumpSpriteImage,
-			_floorSpriteImage, 
+			_floorSpriteImage,
+			_shipSpriteImage, 
 			_hurdleSmallFrontSpriteImage, 
 			_hurdleSmallBackSpriteImage,
 			_hurdleMediumFrontSpriteImage, 
 			_hurdleMediumBackSpriteImage,
+			_hurdleMidLargeFrontSpriteImage, 
+			_hurdleMidLargeBackSpriteImage,
 			_hurdleLargeFrontSpriteImage, 
 			_hurdleLargeBackSpriteImage;
 
@@ -223,6 +244,12 @@
 				_floorSpriteImage.addEventListener("load", onload);
 			}
 
+			if (!_shipSpriteImage) {
+    			_shipSpriteImage = new Image();
+				_shipSpriteImage.src = RR.Constants.SHIP.IMAGE_SRC;
+				_shipSpriteImage.addEventListener("load", onload);
+			}
+
     		if (!_hurdleSmallBackSpriteImage) {
     			_hurdleSmallBackSpriteImage = new Image();
 				_hurdleSmallBackSpriteImage.src = RR.Constants.HURDLE.BACK.SMALL.IMAGE_SRC;
@@ -247,6 +274,18 @@
 				_hurdleMediumFrontSpriteImage.addEventListener("load", onload);
 			}
 
+			if (!_hurdleMidLargeBackSpriteImage) {
+    			_hurdleMidLargeBackSpriteImage = new Image();
+				_hurdleMidLargeBackSpriteImage.src = RR.Constants.HURDLE.BACK.MEDIUM_LARGE.IMAGE_SRC;
+				_hurdleMidLargeBackSpriteImage.addEventListener("load", onload);
+			}
+
+			if (!_hurdleMidLargeFrontSpriteImage) {
+    			_hurdleMidLargeFrontSpriteImage = new Image();
+				_hurdleMidLargeFrontSpriteImage.src = RR.Constants.HURDLE.FRONT.MEDIUM_LARGE.IMAGE_SRC;
+				_hurdleMidLargeFrontSpriteImage.addEventListener("load", onload);
+			}
+
 			if (!_hurdleLargeBackSpriteImage) {
     			_hurdleLargeBackSpriteImage = new Image();
 				_hurdleLargeBackSpriteImage.src = RR.Constants.HURDLE.BACK.LARGE.IMAGE_SRC;
@@ -264,6 +303,7 @@
     		_assets.player = loadPlayer();
     		_assets.background = loadBackground();
     		_assets.floorTiles = loadFloor();
+    		_assets.ship = loadShip();
 
     		var initialHurdle = loadHurdle(randomIntFromInterval(RR.Constants.HURDLE.SIZE.SMALL, RR.Constants.HURDLE.SIZE.LARGE));
 
@@ -402,20 +442,47 @@
 			return floorTiles;
     	}
 
+    	function loadShip() {
+			var ship = generateSprite({
+					context: _context,
+					width: RR.Constants.SHIP.WIDTH,
+					height: RR.Constants.SHIP.HEIGHT,
+					x: -RR.Constants.SHIP.WIDTH,
+					y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - 45,
+					image: _shipSpriteImage
+				});
+
+			ship.updateState = function() {
+
+				this.x += RR.Constants.SHIP.VELOCITY;
+
+				if (this.x > RR.Constants.GAME.WIDTH)
+					this.x = -RR.Constants.SHIP.WIDTH;
+			};
+
+			return ship;
+    	}
+
     	function loadHurdle(hurdleSize) {
 
     		var hurdle = {};
 
-			if (hurdleSize === RR.Constants.HURDLE.SIZE.SMALL) {
-				hurdle = loadSmallHurdle();
-			}
-			else if (hurdleSize === RR.Constants.HURDLE.SIZE.MEDIUM) {
-				hurdle = loadMediumHurdle();
-			}
-			else
-			{
-				hurdle = loadLargeHurdle();
-			}
+    		switch (hurdleSize)
+    		{
+
+    			case RR.Constants.HURDLE.SIZE.SMALL:
+    				hurdle = generateHurdle(RR.Constants.HURDLE.FRONT.SMALL, RR.Constants.HURDLE.BACK.SMALL, _hurdleSmallFrontSpriteImage, _hurdleSmallBackSpriteImage);
+    			break;
+    			case RR.Constants.HURDLE.SIZE.MEDIUM:
+    				hurdle = generateHurdle(RR.Constants.HURDLE.FRONT.MEDIUM, RR.Constants.HURDLE.BACK.MEDIUM, _hurdleMediumFrontSpriteImage, _hurdleMediumBackSpriteImage);
+    			break;
+    			case RR.Constants.HURDLE.SIZE.MEDIUM_LARGE:
+    				hurdle = generateHurdle(RR.Constants.HURDLE.FRONT.MEDIUM_LARGE, RR.Constants.HURDLE.BACK.MEDIUM_LARGE, _hurdleMidLargeFrontSpriteImage, _hurdleMidLargeBackSpriteImage);
+    			break;
+    			default:
+    				hurdle = generateHurdle(RR.Constants.HURDLE.FRONT.LARGE, RR.Constants.HURDLE.BACK.LARGE, _hurdleLargeFrontSpriteImage, _hurdleLargeBackSpriteImage);
+    			break;
+    		}
 
 			hurdle.update = function() {
 				if (_assets.player.isAnimating)
@@ -454,76 +521,26 @@
 			return hurdle;
     	}
 
-    	function loadSmallHurdle() {
+    	function generateHurdle(front, back, frontImage, backImage) {
 
 			var hurdleX = 0;
 
 			var hurdleFront = generateSprite({
 				context: _context,
-				width: RR.Constants.HURDLE.FRONT.SMALL.WIDTH,
-				height: RR.Constants.HURDLE.FRONT.SMALL.HEIGHT,
-				x: -RR.Constants.HURDLE.FRONT.SMALL.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.SMALL.HEIGHT,
-				image: _hurdleSmallFrontSpriteImage
+				width: front.WIDTH,
+				height: front.HEIGHT,
+				x: -front.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - front.HEIGHT,
+				image: frontImage
 			});
 
 			var hurdleBack = generateSprite({
 				context: _context,
-				width: RR.Constants.HURDLE.BACK.SMALL.WIDTH,
-				height: RR.Constants.HURDLE.BACK.SMALL.HEIGHT,
-				x: -RR.Constants.HURDLE.BACK.SMALL.WIDTH,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.SMALL.HEIGHT,
-				image: _hurdleSmallBackSpriteImage
-			});
-
-			return { front: hurdleFront, back: hurdleBack };
-    	}
-
-    	function loadMediumHurdle() {
-
-			var hurdleX = 0;
-
-			var hurdleFront = generateSprite({
-				context: _context,
-				width: RR.Constants.HURDLE.FRONT.MEDIUM.WIDTH,
-				height: RR.Constants.HURDLE.FRONT.MEDIUM.HEIGHT,
-				x: -RR.Constants.HURDLE.FRONT.MEDIUM.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.MEDIUM.HEIGHT,
-				image: _hurdleMediumFrontSpriteImage
-			});
-
-			var hurdleBack = generateSprite({
-				context: _context,
-				width: RR.Constants.HURDLE.BACK.MEDIUM.WIDTH,
-				height: RR.Constants.HURDLE.BACK.MEDIUM.HEIGHT,
-				x: -RR.Constants.HURDLE.BACK.MEDIUM.WIDTH,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.MEDIUM.HEIGHT,
-				image: _hurdleMediumBackSpriteImage
-			});
-
-			return { front: hurdleFront, back: hurdleBack };
-    	}
-
-    	function loadLargeHurdle() {
-
-			var hurdleX = 0;
-
-			var hurdleFront = generateSprite({
-				context: _context,
-				width: RR.Constants.HURDLE.FRONT.LARGE.WIDTH,
-				height: RR.Constants.HURDLE.FRONT.LARGE.HEIGHT,
-				x: -RR.Constants.HURDLE.FRONT.LARGE.WIDTH - RR.Constants.HURDLE.FRONT.X_OFFSET,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.FRONT.LARGE.HEIGHT,
-				image: _hurdleLargeFrontSpriteImage
-			});
-
-			var hurdleBack = generateSprite({
-				context: _context,
-				width: RR.Constants.HURDLE.BACK.LARGE.WIDTH,
-				height: RR.Constants.HURDLE.BACK.LARGE.HEIGHT,
-				x: -RR.Constants.HURDLE.BACK.LARGE.WIDTH,
-				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.HURDLE.BACK.LARGE.HEIGHT,
-				image: _hurdleLargeBackSpriteImage
+				width: back.WIDTH,
+				height: back.HEIGHT,
+				x: -back.WIDTH,
+				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - back.HEIGHT,
+				image: backImage
 			});
 
 			return { front: hurdleFront, back: hurdleBack };
@@ -604,6 +621,10 @@
 
 			// background
 			_assets.background.render();
+
+			// ship
+			_assets.ship.updateState();
+			_assets.ship.render();
 
 			// player
 			_assets.player.updateState();
