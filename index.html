@@ -12,27 +12,31 @@
 
 		canvas {
 			background-color: #000;
-			padding: 0;
-			margin: 0 auto;
 			border: 5px solid #fff;
+			padding-left: 0;
+    		padding-right: 0;
+    		margin-left: auto;
+    		margin-right: auto;
+    		display: block;
+    		width:  800px;
 		}
 	</style>
 </head>
 <body>
-	<canvas id="game" width="800" height="600" tabindex='1'></canvas>
-	<script type="text/javascript">
-  		WebFontConfig = {
-  		  google: { families: [ 'Lemon::latin' ] }
-  		};
-  		(function() {
-  		  var wf = document.createElement('script');
-  		  wf.src = ('https:' == document.location.protocol ? 'https' : 'http') +
-  		    '://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js';
-  		  wf.type = 'text/javascript';
-  		  wf.async = 'true';
-  		  var s = document.getElementsByTagName('script')[0];
-  		  s.parentNode.insertBefore(wf, s);
-  		})(); </script>
+	<canvas id="game" width="800" height="600" tabindex="5"></canvas>
+<script type="text/javascript">
+  WebFontConfig = {
+    google: { families: [ 'Oleo+Script:700:latin', 'Jolly+Lodger::latin', 'Bangers::latin', 'Allan:700:latin', 'Ewert::latin' ] }
+  };
+  (function() {
+    var wf = document.createElement('script');
+    wf.src = ('https:' == document.location.protocol ? 'https' : 'http') +
+      '://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js';
+    wf.type = 'text/javascript';
+    wf.async = 'true';
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(wf, s);
+  })(); </script>
 	<script type="text/javascript">
 	(function() {
 		// http://paulirish.com/2011/requestanimationframe-for-smart-animating/
@@ -70,8 +74,14 @@
     		INITIAL_LEVEL_INTERVAL: 800,
     		MIN_LEVEL_INTERVAL: -225,
     		MAX_LEVEL_INTERVAL: 300,
-    		GRAVITY: 1,
-    		GAME_OVER_ROTATE: 0.1
+    		GRAVITY: 1
+    	},
+    	TITLE: {
+    		LABEL: 'HURDLE MAN',
+    		COLOR: '71, 222, 252',
+    		FONT: '72px "Allan"',
+    		X: 225,
+    		Y: 100
     	},
     	BUTTON: {
     		SPACEBAR: 32
@@ -89,7 +99,7 @@
     		IMAGE_SRC: "images/run-right.png",
     		JUMP_IMAGE_SRC: "images/jump.png",
     		NUMBER_OF_JUMP_FRAMES: 2,
-    		JUMP_VELOCITY: -10.3,
+    		JUMP_VELOCITY: -10.1,
     		MAX_BUTTON_PRESS: 5
     	},
     	FLOOR: {
@@ -157,6 +167,16 @@
     			MEDIUM_LARGE: 3,
     			LARGE: 4
     		}
+    	},
+    	SCORE: {
+    		X: 105,
+    		Y: 60,
+    		LABEL_X: 30,
+    		LABEL_Y: 60,
+    		LABEL_FONT: '36px "Jolly Lodger"',
+    		LABEL_COLOR: '255, 255, 255',
+    		FONT: '36px "Jolly Lodger"',
+    		COLOR: '255, 255, 255'
     	}
     }
 
@@ -175,6 +195,10 @@
 		var _buttonPressed = false;
 		var _buttonPress = 0;
 
+		var _gameStart = false;
+		var _showingTitle = true;
+		var _preloadAnimation = true;
+
 		var _assets = {
 			player: null,
 			background: null,
@@ -182,6 +206,9 @@
 			floorTiles: [],
 			hurdles: []
 		};
+
+		var _titleAlpha = 1.0;
+		var _scoreAlpha = 0.05;
 
 		var _score = 0;
 
@@ -216,10 +243,7 @@
     		{
     			loadAssets();
     			loadEvents();
-
-				prepareNextLevel();
-
-    			_assets.player.isAnimating = true;
+    			
     			gameLoop();
     		}
     	}
@@ -317,10 +341,6 @@
     		_assets.background = loadBackground();
     		_assets.floorTiles = loadFloor();
     		_assets.ship = loadShip();
-
-    		var initialHurdle = loadHurdle(randomIntFromInterval(RR.Constants.HURDLE.SIZE.SMALL, RR.Constants.HURDLE.SIZE.LARGE));
-
-    		_assets.hurdles.push(initialHurdle);
     	}
 
     	function loadBackground() {
@@ -341,7 +361,7 @@
 				context: _context,
 				width: RR.Constants.PLAYER.WIDTH,
 				height: RR.Constants.PLAYER.HEIGHT,
-				x: (RR.Constants.GAME.WIDTH / 2) - ((RR.Constants.PLAYER.WIDTH / RR.Constants.PLAYER.NUMBER_OF_FRAMES) / 2),
+				x: RR.Constants.GAME.WIDTH,
 				y: RR.Constants.GAME.HEIGHT - RR.Constants.FLOOR.HEIGHT - RR.Constants.PLAYER.HEIGHT,
 				image: _playerSpriteImage,
 				numberOfFrames: RR.Constants.PLAYER.NUMBER_OF_FRAMES,
@@ -426,9 +446,22 @@
 
 			player.updateState = function() {
 
-				if (player.isJumping)
+				if (!_showingTitle && _preloadAnimation)
 				{
-					player.updateJumpState();
+					this.x -= RR.Constants.FLOOR.VELOCITY;
+
+					if (this.x <= (RR.Constants.GAME.WIDTH / 2) - ((RR.Constants.PLAYER.WIDTH / RR.Constants.PLAYER.NUMBER_OF_FRAMES) / 2) + 10)
+					{
+						_preloadAnimation = false;
+						prepareNextLevel();
+					}
+				}
+				else
+				{
+					if (player.isJumping)
+					{
+						player.updateJumpState();
+					}
 				}
 
 				player.update();
@@ -628,10 +661,17 @@
 			document.addEventListener('keydown', function(event) {
             	if (event.keyCode === RR.Constants.BUTTON.SPACEBAR)
             	{
-            		if (!_assets.player.isJumping)
+            		if (_gameStart)
             		{
-            			_assets.player.jumpStateOn();
-            			_buttonPressed = true;
+            			if (!_assets.player.isJumping)
+            			{
+            				_assets.player.jumpStateOn();
+            				_buttonPressed = true;
+            			}
+            		}
+            		else
+            		{
+            			beginGame();
             		}
             	}
     		}, false);
@@ -657,24 +697,32 @@
 			_assets.player.updateState();
 			_assets.player.render();
 
-			// hurdles
-			for (var i = _assets.hurdles.length-1; i >= 0; i--) {
-				_assets.hurdles[i].update();
-				_assets.hurdles[i].render();
+			if (_gameStart)
+			{
+				// hurdles
+				for (var i = _assets.hurdles.length-1; i >= 0; i--) {
+					_assets.hurdles[i].update();
+					_assets.hurdles[i].render();
+	
+					_assets.player.checkCollision(_assets.hurdles[i]);
+	
+					if (_assets.hurdles[i].back.x > RR.Constants.GAME.WIDTH)
+					{
+						if (_canRemoveHurdle)
+							_assets.hurdles.splice(i, 1);
+					}
+				};
+	
+				drawScore();
 
-				_assets.player.checkCollision(_assets.hurdles[i]);
+			}
 
-				if (_assets.hurdles[i].back.x > RR.Constants.GAME.WIDTH)
-				{
-					if (_canRemoveHurdle)
-						_assets.hurdles.splice(i, 1);
-				}
-			};
+			loadTitleScreen();
 
 			// floor
 			for (var i = _assets.floorTiles.length-1; i >= 0; i--) {
 				
-				if (_assets.player.isAnimating)
+				if (_assets.player.isAnimating && !_preloadAnimation)
 				{
 					_assets.floorTiles[i].x += RR.Constants.FLOOR.VELOCITY;
 	
@@ -684,9 +732,28 @@
 	
 				_assets.floorTiles[i].render();
 			};
-
-			drawScore();
 			
+		}
+
+		function loadTitleScreen() {
+
+			if (_titleAlpha > 0.05)
+			{
+				if (!_showingTitle)
+				{
+					_titleAlpha = _titleAlpha - 0.05;
+				}
+	
+				_context.font = RR.Constants.TITLE.FONT;
+				_context.fillStyle = 'rgba('+ RR.Constants.TITLE.COLOR + ','+_titleAlpha+')';
+				_context.fillText(RR.Constants.TITLE.LABEL, RR.Constants.TITLE.X, RR.Constants.TITLE.Y);
+			}
+		}
+
+		function beginGame() {
+			_showingTitle = false;
+			_gameStart = true;
+			_assets.player.isAnimating = true;
 		}
 
 		function clear() {
@@ -707,9 +774,19 @@
 
 		function drawScore()
 		{
-			_context.font = "36px Lemon";
-			_context.fillStyle = '#a3e8ff';
-			_context.fillText(_score, 30, 60);
+			if (_scoreAlpha < 1)
+			{
+				_scoreAlpha = _scoreAlpha + 0.05;
+				_scoreAlpha = Math.round( _scoreAlpha * 10 ) / 10;
+			}
+
+			_context.font = RR.Constants.SCORE.LABEL_FONT;
+			_context.fillStyle = 'rgba('+ RR.Constants.SCORE.LABEL_COLOR+ ','+_scoreAlpha+')';
+			_context.fillText('Score:' , RR.Constants.SCORE.LABEL_X, RR.Constants.SCORE.LABEL_Y);
+
+			_context.font = RR.Constants.SCORE.FONT;
+			_context.fillStyle = 'rgba('+ RR.Constants.SCORE.COLOR+ ','+_scoreAlpha+')';
+			_context.fillText(_score, RR.Constants.SCORE.X, RR.Constants.SCORE.Y);
 		}
 
 		function checkForNextLevel() {
