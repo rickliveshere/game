@@ -21,6 +21,19 @@
 <body>
 	<canvas id="game" width="800" height="600" tabindex='1'></canvas>
 	<script type="text/javascript">
+  		WebFontConfig = {
+  		  google: { families: [ 'Lemon::latin' ] }
+  		};
+  		(function() {
+  		  var wf = document.createElement('script');
+  		  wf.src = ('https:' == document.location.protocol ? 'https' : 'http') +
+  		    '://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js';
+  		  wf.type = 'text/javascript';
+  		  wf.async = 'true';
+  		  var s = document.getElementsByTagName('script')[0];
+  		  s.parentNode.insertBefore(wf, s);
+  		})(); </script>
+	<script type="text/javascript">
 	(function() {
 		// http://paulirish.com/2011/requestanimationframe-for-smart-animating/
 		// http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
@@ -54,9 +67,9 @@
     	GAME: {
     		WIDTH: 800,
     		HEIGHT: 400,
-    		INITIAL_LEVEL_INTERVAL: 3000,
-    		MIN_LEVEL_INTERVAL: 1000,
-    		LEVEL_INTERVAL: 120,
+    		INITIAL_LEVEL_INTERVAL: 800,
+    		MIN_LEVEL_INTERVAL: -225,
+    		MAX_LEVEL_INTERVAL: 300,
     		GRAVITY: 1,
     		GAME_OVER_ROTATE: 0.1
     	},
@@ -76,7 +89,7 @@
     		IMAGE_SRC: "images/run-right.png",
     		JUMP_IMAGE_SRC: "images/jump.png",
     		NUMBER_OF_JUMP_FRAMES: 2,
-    		JUMP_VELOCITY: -10,
+    		JUMP_VELOCITY: -10.3,
     		MAX_BUTTON_PRESS: 5
     	},
     	FLOOR: {
@@ -157,8 +170,6 @@
 
 		var _levelInterval = RR.Constants.GAME.INITIAL_LEVEL_INTERVAL;
 
-		var _levelIntervalOffset = RR.Constants.GAME.LEVEL_INTERVAL;
-
 		var _jumpVelocity = RR.Constants.PLAYER.JUMP_VELOCITY;
 
 		var _buttonPressed = false;
@@ -171,6 +182,8 @@
 			floorTiles: [],
 			hurdles: []
 		};
+
+		var _score = 0;
 
 		var _canvas,
 			_context,
@@ -382,23 +395,32 @@
 
 			player.checkCollision = function(hurdle) {
 
-				var playerX = this.x+10;
-				var playerY = this.y;
+				var range = hurdle.front.x - this.x;
 
-				var playerXMax = playerX + (this.width / this.numberOfFrames) - 23;
-				var playerYMax = playerY + this.height;
-
-				var hurdleX = hurdle.front.x+2;
-				var hurdleY = hurdle.front.y+5;
-
-				var hurdleXMax = hurdle.front.x + hurdle.front.width-2;
-				var hurdleYMax = hurdle.front.y + hurdle.front.height-2;
-
-				if (playerX < hurdleXMax  && playerXMax > hurdleX &&
-					playerY < hurdleYMax && playerYMax > hurdleY) {
-					
-					// Game over
-					this.gameOver();
+				if (Math.abs(range) <= 45)
+				{
+					var playerX = this.x+10;
+					var playerY = this.y;
+	
+					var playerXMax = playerX + (this.width / this.numberOfFrames) - 23;
+					var playerYMax = playerY + this.height;
+	
+					var hurdleX = hurdle.front.x+2;
+					var hurdleY = hurdle.front.y+5;
+	
+					var hurdleXMax = hurdle.front.x + hurdle.front.width-2;
+					var hurdleYMax = hurdle.front.y + hurdle.front.height-2;
+	
+					if (playerX < hurdleXMax  && playerXMax > hurdleX &&
+						playerY < hurdleYMax && playerYMax > hurdleY) {
+						
+						// Game over
+						this.gameOver();
+					}
+					else if (playerXMax < hurdleX)
+					{
+						_score++;
+					}
 				}
 			};
 
@@ -510,6 +532,11 @@
 				{
 					_context.moveTo(moveToX, this.back.y+34);
 					_context.lineTo(lineToX, this.front.y+34);
+				}
+				if (this.front.height > RR.Constants.HURDLE.FRONT.MEDIUM.HEIGHT)
+				{
+					_context.moveTo(moveToX, this.back.y+46);
+					_context.lineTo(lineToX, this.front.y+46);
 				}
 				_context.lineWidth = 5;
       			_context.strokeStyle = '#ff0000';
@@ -657,6 +684,8 @@
 	
 				_assets.floorTiles[i].render();
 			};
+
+			drawScore();
 			
 		}
 
@@ -674,6 +703,13 @@
 			
 			clear();
 			loadNextFrame();
+		}
+
+		function drawScore()
+		{
+			_context.font = "36px Lemon";
+			_context.fillStyle = '#a3e8ff';
+			_context.fillText(_score, 30, 60);
 		}
 
 		function checkForNextLevel() {
@@ -696,11 +732,10 @@
     				checkForNextLevel();
     			}, _levelInterval);
 
-			if (_levelInterval > RR.Constants.GAME.MIN_LEVEL_INTERVAL)
-			{
-				_levelInterval -= _levelIntervalOffset;
-				_levelIntervalOffset -= 20;
-			}
+
+			var levelOffset = randomIntFromInterval(RR.Constants.GAME.MIN_LEVEL_INTERVAL, RR.Constants.GAME.MAX_LEVEL_INTERVAL);
+
+			_levelInterval = RR.Constants.GAME.INITIAL_LEVEL_INTERVAL + levelOffset;
 		}
 
 		function randomIntFromInterval(min,max)
